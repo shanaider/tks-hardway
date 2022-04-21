@@ -1,0 +1,15 @@
+#Sample Inventory File
+[all]
+pump-hardway-0009 ansible_host=94.74.113.88 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.201
+pump-hardway-0010 ansible_host=94.74.113.9 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.154
+pump-hardway-0011 ansible_host=43.225.143.46 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.156
+
+[master]
+pump-hardway-0009
+
+[etcd]
+pump-hardway-0009
+
+[worker]
+pump-hardway-0010
+pump-hardway-0011

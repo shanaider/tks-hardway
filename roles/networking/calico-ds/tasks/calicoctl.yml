@@ -1,0 +1,49 @@
+---
+- name: "Install calicoctl"
+  get_url:
+    url: "https://github.com/projectcalico/calicoctl/releases/download/v3.20.4/{{ item }}"
+    dest: /usr/local/bin/calicoctl
+    mode: '0755'
+    validate_certs: no
+    timeout: 30
+  with_items:
+    - calicoctl-linux-amd64
+
+- name: "Make Directory calico-etcd"
+  file:
+    path: /etc/calico/etcd
+    state: directory
+    mode: 0755
+
+- name: "Copy CA to /var/lib/kubernetes"
+  copy:
+    src: /var/lib/kubernetes/ca.pem
+    dest: /etc/calico/etcd/etcd-ca
+    remote_src: yes     
+
+- name: "Copy Certificate to /var/lib/kubernetes"
+  copy:
+    src: /var/lib/kubernetes/kubernetes.pem
+    dest: /etc/calico/etcd/etcd-cert
+    remote_src: yes
+
+- name: "Copy Key to /var/lib/kubernetes"
+  copy:
+    src: /var/lib/kubernetes/kubernetes-key.pem
+    dest: /etc/calico/etcd/etcd-key
+    remote_src: yes
+
+- name: "Create calicoctl.cfg"
+  copy:
+    dest: "/etc/calico/calicoctl.cfg"
+    content: |      
+      apiVersion: projectcalico.org/v3
+      kind: CalicoAPIConfig
+      metadata:
+      spec:
+        etcdEndpoints: https://127.0.0.1:2379
+        etcdKeyFile: /etc/calico/etcd/etcd-key
+        etcdCertFile: /etc/calico/etcd/etcd-cert
+        etcdCACertFile: /etc/calico/etcd/etcd-ca
+
+

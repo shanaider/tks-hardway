@@ -1,0 +1,5 @@
+dns_server_1: "8.8.8.8"
+dns_server_2: "1.0.0.1"
+
+ntp_server_1: "time.google.com"
+ntp_server_2: "ntp.ubuntu.com"

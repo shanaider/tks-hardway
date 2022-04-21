@@ -1,0 +1,5 @@
+KUBERNETES_PUBLIC_ADDRESS: "{{ ansible_host }}"
+INTERNAL_IP: "{{ internal_ip }}"
+SERVICE_CIDR: "192.96.0.0/16"
+CLUSTER_CIDR: "192.168.0.0/16"
+KUBERNETES_HOSTNAMES: "kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local"

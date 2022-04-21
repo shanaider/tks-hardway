@@ -1,0 +1,405 @@
+---
+- name: 'Install CFSSL'
+  shell: |
+    wget -q --show-progress --https-only --timestamping \
+    https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/linux/cfssl \
+    https://storage.googleapis.com/kubernetes-the-hard-way/cfssl/1.4.1/linux/cfssljson
+    chmod +x cfssl cfssljson
+    sudo mv cfssl cfssljson /usr/local/bin/
+
+- name: 'Install kubectl'
+  shell: |
+    wget https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kubectl
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/
+
+- name: 'generate Certificate Authority'
+  shell: |
+    {
+    cat > ca-config.json <<EOF
+    {
+      "signing": {
+        "default": {
+          "expiry": "876000h"
+        },
+        "profiles": {
+          "kubernetes": {
+            "usages": ["signing", "key encipherment", "server auth", "client auth"],
+            "expiry": "876000h"
+          }
+        }
+      }
+    }
+    EOF
+
+    cat > ca-csr.json <<EOF
+    {
+      "CN": "Kubernetes",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "Kubernetes",
+          "OU": "CA",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+
+    }
+
+- name: 'generate Client and Server Certificates'
+  shell: |
+    {
+    cat > admin-csr.json <<EOF
+    {
+      "CN": "admin",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:masters",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      admin-csr.json | cfssljson -bare admin
+
+    }
+  
+- name: 'generate The Kubelet Client Certificates'
+  shell: |
+    cat > {{ item }}-csr.json <<EOF
+    {
+      "CN": "system:node:{{ item }}",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:nodes",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert \
+      -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json \
+      -hostname={{ item }},{{ hostvars[item]['internal_ip'] }},{{ hostvars[item]['ansible_host'] }} \
+      -profile=kubernetes \
+      {{ item }}-csr.json | cfssljson -bare {{ item }}
+      
+  with_inventory_hostnames: worker
+
+- name: 'generate The Controller Manager Client Certificate'
+  shell: |
+    {
+    cat > kube-controller-manager-csr.json <<EOF
+    {
+      "CN": "system:kube-controller-manager",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:kube-controller-manager",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      kube-controller-manager-csr.json | cfssljson -bare kube-controller-manager
+
+    }
+
+- name: 'generate The Kube Proxy Client Certificate'
+  shell: |
+    {
+    cat > kube-proxy-csr.json <<EOF
+    {
+      "CN": "system:kube-proxy",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:node-proxier",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      kube-proxy-csr.json | cfssljson -bare kube-proxy
+
+    }
+
+- name: 'generate The Scheduler Client Certificate'
+  shell: |
+    {
+    cat > kube-scheduler-csr.json <<EOF
+    {
+      "CN": "system:kube-scheduler",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "system:kube-scheduler",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      kube-scheduler-csr.json | cfssljson -bare kube-scheduler
+
+    }
+
+- name: 'generate The Kubernetes API Server Certificate'
+  shell: |
+    {
+    cat > kubernetes-csr.json <<EOF
+    {
+      "CN": "kubernetes",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "Kubernetes",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -hostname=192.96.0.1,{{ INTERNAL_IP }},{{ KUBERNETES_PUBLIC_ADDRESS }},127.0.0.1,{{ KUBERNETES_HOSTNAMES }} \
+      -profile=kubernetes \
+      kubernetes-csr.json | cfssljson -bare kubernetes
+
+    }
+
+- name: 'generate The Service Account Key Pair'
+  shell: |
+    {
+    cat > service-account-csr.json <<EOF
+    {
+      "CN": "service-accounts",
+      "key": {
+        "algo": "rsa",
+        "size": 2048
+      },
+      "names": [
+        {
+          "C": "US",
+          "L": "Portland",
+          "O": "Kubernetes",
+          "OU": "Kubernetes The Hard Way",
+          "ST": "Oregon"
+        }
+      ]
+    }
+    EOF
+
+    cfssl gencert \
+      -ca=ca.pem \
+      -ca-key=ca-key.pem \
+      -config=ca-config.json \
+      -profile=kubernetes \
+      service-account-csr.json | cfssljson -bare service-account
+
+    }
+
+##skip scp to master-node
+
+- name: 'The kubelet Kubernetes Configuration File'
+  shell: |
+    kubectl config set-cluster kubernetes-the-hard-way \
+    --certificate-authority=ca.pem \
+    --embed-certs=true \
+    --server=https://{{ KUBERNETES_PUBLIC_ADDRESS }}:6443 \
+    --kubeconfig={{ item }}.kubeconfig
+
+    kubectl config set-credentials system:node:{{ item }} \
+      --client-certificate={{ item }}.pem \
+      --client-key={{ item }}-key.pem \
+      --embed-certs=true \
+      --kubeconfig={{ item }}.kubeconfig
+
+    kubectl config set-context default \
+      --cluster=kubernetes-the-hard-way \
+      --user=system:node:{{ item }} \
+      --kubeconfig={{ item }}.kubeconfig
+
+    kubectl config use-context default --kubeconfig={{ item }}.kubeconfig
+  with_inventory_hostnames: worker
+
+- name: The kube-proxy Kubernetes Configuration File
+  shell: |
+    {
+      kubectl config set-cluster kubernetes-the-hard-way \
+        --certificate-authority=ca.pem \
+        --embed-certs=true \
+        --server=https://{{ KUBERNETES_PUBLIC_ADDRESS }}:6443 \
+        --kubeconfig=kube-proxy.kubeconfig
+
+      kubectl config set-credentials system:kube-proxy \
+        --client-certificate=kube-proxy.pem \
+        --client-key=kube-proxy-key.pem \
+        --embed-certs=true \
+        --kubeconfig=kube-proxy.kubeconfig
+
+      kubectl config set-context default \
+        --cluster=kubernetes-the-hard-way \
+        --user=system:kube-proxy \
+        --kubeconfig=kube-proxy.kubeconfig
+
+      kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
+    }
+
+- name: 'The kube-controller-manager Kubernetes Configuration File'
+  shell: |
+    {
+      kubectl config set-cluster kubernetes-the-hard-way \
+        --certificate-authority=ca.pem \
+        --embed-certs=true \
+        --server=https://127.0.0.1:6443 \
+        --kubeconfig=kube-controller-manager.kubeconfig
+
+      kubectl config set-credentials system:kube-controller-manager \
+        --client-certificate=kube-controller-manager.pem \
+        --client-key=kube-controller-manager-key.pem \
+        --embed-certs=true \
+        --kubeconfig=kube-controller-manager.kubeconfig
+
+      kubectl config set-context default \
+        --cluster=kubernetes-the-hard-way \
+        --user=system:kube-controller-manager \
+        --kubeconfig=kube-controller-manager.kubeconfig
+
+      kubectl config use-context default --kubeconfig=kube-controller-manager.kubeconfig
+    }
+
+- name: 'The kube-scheduler Kubernetes Configuration File'
+  shell: |
+    {
+      kubectl config set-cluster kubernetes-the-hard-way \
+        --certificate-authority=ca.pem \
+        --embed-certs=true \
+        --server=https://127.0.0.1:6443 \
+        --kubeconfig=kube-scheduler.kubeconfig
+
+      kubectl config set-credentials system:kube-scheduler \
+        --client-certificate=kube-scheduler.pem \
+        --client-key=kube-scheduler-key.pem \
+        --embed-certs=true \
+        --kubeconfig=kube-scheduler.kubeconfig
+
+      kubectl config set-context default \
+        --cluster=kubernetes-the-hard-way \
+        --user=system:kube-scheduler \
+        --kubeconfig=kube-scheduler.kubeconfig
+
+      kubectl config use-context default --kubeconfig=kube-scheduler.kubeconfig
+    }
+
+- name: 'The admin Kubernetes Configuration File'
+  shell: |
+    {
+      kubectl config set-cluster kubernetes-the-hard-way \
+        --certificate-authority=ca.pem \
+        --embed-certs=true \
+        --server=https://127.0.0.1:6443 \
+        --kubeconfig=admin.kubeconfig
+
+      kubectl config set-credentials admin \
+        --client-certificate=admin.pem \
+        --client-key=admin-key.pem \
+        --embed-certs=true \
+        --kubeconfig=admin.kubeconfig
+
+      kubectl config set-context default \
+        --cluster=kubernetes-the-hard-way \
+        --user=admin \
+        --kubeconfig=admin.kubeconfig
+
+      kubectl config use-context default --kubeconfig=admin.kubeconfig
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+
+

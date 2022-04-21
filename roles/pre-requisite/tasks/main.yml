@@ -1,0 +1,155 @@
+---
+  - name: Creating /etc/resolv.conf
+    copy:
+      dest: "/etc/resolv.conf"
+      mode: '0644'
+      content: |
+        nameserver {{ dns_server_1 }}
+        nameserver {{ dns_server_2 }}
+        options timeout:5 attempts:2 rotate single-request
+    
+  - name: Set timezone to Asia/Bangkok
+    timezone:
+      name: Asia/Bangkok
+
+  - name: Disable SWAP
+    command: swapoff -a
+  -  replace:
+      path: /etc/fstab
+      regexp: '^([^#].*?\sswap\s+.*)$'
+      replace: '# \1'
+    
+  - name: disable ufw
+    ufw:
+      state: disabled
+    ignore_errors: true
+  
+  - name: iptables flush ALL chains
+    iptables:
+      chain: "{{ item }}"
+      flush: yes
+    with_items:  [ 'INPUT', 'FORWARD', 'OUTPUT' ]
+
+  - name: Probe br_netfilter
+    command: 'modprobe br_netfilter'
+  
+  - name: Letting iptables see bridged traffic
+    shell: |
+      cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+      br_netfilter
+      EOF
+
+      cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+      net.bridge.bridge-nf-call-ip6tables = 1
+      net.bridge.bridge-nf-call-iptables = 1
+      EOF
+
+      sudo sysctl --system
+
+  - name: systctl reload all
+    command: sudo sysctl --system
+
+  - name: stop and disable unused services
+    systemd:
+      name: "{{ item }}"
+      state: stopped
+      enabled: no
+      masked: yes
+    with_items:
+      - systemd-resolved
+    ignore_errors: True
+
+  - name : 'Configure NetworkManager before attempting to use Calico networking'
+    shell: |
+      cat << EOF | sudo tee /etc/NetworkManager/conf.d/calico.conf
+      [keyfile]
+      unmanaged-devices=interface-name:cali*;interface-name:tunl*;interface-name:vxlan.calico;interface-name:wireguard.cali
+      EOF
+  
+  - name: create /etc/NetworkManager/NetworkManager.conf
+    copy:
+      dest: "/etc/NetworkManager/NetworkManager.conf"
+      mode: '0644'
+      content: |
+        [main]
+        plugins=ifupdown,keyfile
+        dns=none
+        rc-manager=unmanage
+        
+        [ifupdown]
+        managed=true
+        
+        [device]
+        wifi.scan-rand-mac-address=no
+
+  
+  - name: Restart NetworkManager
+    systemd:
+      name: NetworkManager
+      state: restarted
+  
+  - name: install and update essential packages paper mode
+    apt:
+      update_cache: yes
+      state: latest
+      force_apt_get: yes
+      pkg:
+      - ipvsadm
+      - conntrack
+      - make
+      - gpg-agent
+      - ipset
+      - nfs-common
+      - unzip
+      - curl
+      - chrony
+      - ntpdate
+      - open-iscsi
+      - nmon
+      - htop
+      - screen
+      - lynx
+      - wget
+      - net-tools
+      - nano
+      - apt-transport-https
+      - software-properties-common
+      - sshpass
+      - socat
+  
+  - stat: path=/etc/chrony/chrony.conf
+    register: chronyconf
+
+  - name: backup chrony
+    command: mv /etc/chrony/chrony.conf /etc/chrony/chrony.conf.{{ lookup('pipe', 'date +%s') }}
+    when: chronyconf.stat.exists
+
+  - file:
+      path: /etc/chrony/chrony.conf
+      state: absent
+  
+  - name: Creating /etc/chrony/chrony.conf
+    copy:
+        dest: "/etc/chrony/chrony.conf"
+        mode: '0644'
+        content: |
+            server {{ ntp_server_1 }} iburst prefer
+            server {{ ntp_server_2 }} iburst
+            driftfile /var/lib/chrony/drift
+            makestep 1.0 3
+            rtcsync
+            logdir /var/log/chrony    
+  
+  - lineinfile:
+      create: yes
+      state: present
+      dest: "/etc/default/chrony"
+      line: "{{ item }}"
+    with_items:
+      - DAEMON_OPTS="-4"
+  
+  - name: systemd restart chrony
+    systemd:
+      state: restarted
+      name: chrony
+      enabled: yes

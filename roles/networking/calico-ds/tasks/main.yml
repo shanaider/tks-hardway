@@ -1,0 +1,73 @@
+---
+- name: "Decode base64 on ETCD Certificate"
+  shell: |
+    cat /etc/etcd/kubernetes.pem |base64 -w 0
+  register: etcd_cert
+
+- name: "Decode base64 on ETCD Cert Key"
+  shell: |
+    cat /etc/etcd/kubernetes-key.pem |base64 -w 0
+  register: etcd_key
+
+- name: "Decode base64 on ETCD CA"
+  shell: |
+    cat /etc/etcd/ca.pem |base64 -w 0
+  register: etcd_ca
+
+# - debug:
+#     var: etcd_cert.stdout
+
+- name: "Apply Calico-etcd Template"
+  template:
+    src: files/calico-etcd.yml.j2
+    dest: /root/calico-etcd.yml
+
+- name: "Creating kubernetes-services-endpoint.yaml for BPF Mode"
+  shell: |
+    cat << EOF | sudo tee kubernetes-services-endpoint.yaml
+    kind: ConfigMap
+    apiVersion: v1
+    metadata:
+      name: kubernetes-services-endpoint
+      namespace: kube-system
+    data:
+      KUBERNETES_SERVICE_HOST: "{{ ansible_host }}"
+      KUBERNETES_SERVICE_PORT: "6443"
+    EOF
+
+- name: "Apply kubernetes-services-endpoint.yaml "
+  shell: |
+    kubectl create -f /root/kubernetes-services-endpoint.yaml 
+
+
+
+- name: "Apply calico with BPF Mode"
+  shell: |
+    kubectl create -f /root/calico-etcd.yml
+
+
+- name: "Include Install Calicoctl Task"
+  include_tasks: calicoctl.yml
+
+- name: "Calicoctl patch felixconfiguration "
+  command: |
+    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
+  retries: 10
+  delay: 5
+  register: result
+  until: result.rc == 0
+
+- name: "Enable BPF Mode"
+  command: |
+    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
+  retries: 10
+  delay: 5
+  register: result
+  until: result.rc == 0
+
+
+
+
+
+
+
