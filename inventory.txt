@@ -1,15 +1,19 @@
 #Sample Inventory File
 [all]
-pump-hardway-0009 ansible_host=94.74.113.88 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.201
-pump-hardway-0010 ansible_host=94.74.113.9 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.154
-pump-hardway-0011 ansible_host=43.225.143.46 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.156
+pump-cluster-0001 ansible_host=110.238.117.250 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.95
+pump-cluster-0002 ansible_host=49.0.199.46 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.15
+pump-cluster-0003 ansible_host=94.74.119.22 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.208
+pump-cluster-0004 ansible_host=43.255.106.69 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.201
 
 [master]
-pump-hardway-0009
+pump-cluster-0001
+pump-cluster-0002
+pump-cluster-0003
 
 [etcd]
-pump-hardway-0009
+pump-cluster-0001
+pump-cluster-0002
+pump-cluster-0003
 
 [worker]
-pump-hardway-0010
-pump-hardway-0011
+pump-cluster-0004

@@ -1,4 +1,7 @@
 ---
+##Cluster domain
+dns_domain: "cluster.local"
+
 ##DNS server
 dns_server_1: "8.8.8.8"
 dns_server_2: "1.0.0.1"
@@ -11,7 +14,7 @@ ntp_server_2: "ntp.ubuntu.com"
 kubedns: "192.96.0.10"
 
 ##IP Master or LB for kubeconfig
-KUBERNETES_PUBLIC_ADDRESS: "{{ ansible_host }}"
+kube_apiserver_ip: "94.74.114.129"
 
 ##IP of the master via internal_ip
 INTERNAL_IP: "{{ internal_ip }}"
