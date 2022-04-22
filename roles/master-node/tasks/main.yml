@@ -1,4 +1,18 @@
 ---
+- name: Copy the Cert & Key file from master0 to master1-2 
+  synchronize:
+    src: "/root/{{ item }}"
+    dest: "/var/lib/kubernetes/{{ item }}"
+    mode: push
+  delegate_to: "{{groups['master']}}"
+  with_items: 
+    - 'ca.pem'
+    - 'ca-key.pem'
+    - 'kubernetes.pem'
+    - 'kubernetes-key.pem' 
+    - 'service-account.pem'
+    - 'service-account-key.pem'
+
 - name: "Bootstrapping the Kubernetes Control Plane"
   shell: |
     sudo mkdir -p /etc/kubernetes/config
