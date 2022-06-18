@@ -1,0 +1,84 @@
+- set_fact:
+    runtime_ep: "unix:///var/run/crio/crio.sock"
+    cri_service: "crio.service"
+
+- name: "Make Directories"
+  file:
+    path: '{{ item }}'
+    state: directory
+    mode: 0755
+  with_items: 
+    - "/etc/cni/net.d"
+    - "/opt/cni/bin"
+    - "/etc/containers"
+    - "/etc/sysconfig"
+    - "/etc/crio/"
+
+- name: "Download packages crio"   
+  get_url:
+    url: '{{ item }}'
+    dest: /root/crio.tar.gz
+    validate_certs: no
+    timeout: 30
+  retries: 5
+  delay: 3
+  register: get_url_result
+  until: get_url_result is succeeded
+  with_items:
+  - https://storage.googleapis.com/k8s-conform-cri-o/artifacts/cri-o.amd64.c03e400ec69fb22256a1b9c8f3ae8011a3539582.tar.gz
+
+- name: "unarchive cri-o {{ crio_version }}"
+  unarchive:
+    src: "/root/crio.tar.gz"
+    dest: /root
+    remote_src: yes
+
+##include all configs and systemd of the crio
+- name: "Install CRI-O"
+  shell: |
+    cd /root/cri-o ; bash ./install
+
+
+- name: create registries.conf
+  copy:
+    dest: "/etc/containers/registries.conf"
+    mode: '0644'
+    backup: yes
+    content: |
+      unqualified-search-registries = ["docker.io", "quay.io"]
+
+- name: create crictl.yaml
+  copy:
+    dest: "/etc/crictl.yaml"
+    mode: '644'
+    content: |
+      runtime-endpoint: "{{ runtime_ep }}"
+      image-endpoint: "{{ runtime_ep }}"
+      timeout: 5
+
+- name: create file /etc/sysconfig/crio
+  copy:
+    dest: "/etc/sysconfig/crio"
+    mode: '0644'
+    backup: yes
+    content: |
+      CRIO_CONFIG_OPTIONS="--pids-limit=8192"
+      CRIO_METRICS_OPTIONS="--enable-metrics" 
+
+- name: update crio-o log
+  lineinfile:
+    path: /usr/local/lib/systemd/system/crio.service
+    insertbefore: '^ExecStart'
+    line: 'StandardOutput=append:/var/log/cri-o.log'
+
+- name: 'Reload / Enable / start CRIO'
+  systemd:
+    name: '{{ item }}'
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  with_items: 
+    - crio
+
+
+

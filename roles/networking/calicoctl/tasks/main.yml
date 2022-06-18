@@ -6,6 +6,10 @@
     mode: '0755'
     validate_certs: no
     timeout: 30
+  retries: 5
+  delay: 3
+  register: get_url_result
+  until: get_url_result is succeeded
   with_items:
     - calicoctl-linux-amd64
 
@@ -46,4 +50,36 @@
         etcdCertFile: /etc/calico/etcd/etcd-cert
         etcdCACertFile: /etc/calico/etcd/etcd-ca
 
+- name: "Verify calico pods are running or not"
+  command: |
+    kubectl wait --namespace kube-system \
+    --for=condition=ready pod \
+    --selector=k8s-app=calico-node \
+    --timeout=180s
+  register: calico_results
+  retries: 5
+  delay: 5
+  until: calico_results.rc == 0
+  when: 
+    - inventory_hostname == groups['master'][0]
+
+- name: "Calicoctl patch felixconfiguration "
+  command: |
+    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
+  retries: 30
+  delay: 5
+  register: result
+  until: result.rc == 0
+  when: 
+    - inventory_hostname == groups['master'][0]
+
+- name: "Enable BPF Mode"
+  command: |
+    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
+  retries: 10
+  delay: 5
+  register: result
+  until: result.rc == 0
+  when: 
+    - inventory_hostname == groups['master'][0]
 

@@ -31,7 +31,7 @@
       name: kubernetes-services-endpoint
       namespace: kube-system
     data:
-      KUBERNETES_SERVICE_HOST: "{{ ansible_host }}"
+      KUBERNETES_SERVICE_HOST: "{{ kube_apiserver_ip }}"
       KUBERNETES_SERVICE_PORT: "6443"
     EOF
 
@@ -39,31 +39,11 @@
   shell: |
     kubectl create -f /root/kubernetes-services-endpoint.yaml 
 
-
-
 - name: "Apply calico with BPF Mode"
   shell: |
     kubectl create -f /root/calico-etcd.yml
 
 
-- name: "Include Install Calicoctl Task"
-  include_tasks: calicoctl.yml
-
-- name: "Calicoctl patch felixconfiguration "
-  command: |
-    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfKubeProxyIptablesCleanupEnabled": false}}'
-  retries: 10
-  delay: 5
-  register: result
-  until: result.rc == 0
-
-- name: "Enable BPF Mode"
-  command: |
-    calicoctl patch felixconfiguration default --patch='{"spec": {"bpfEnabled": true}}'
-  retries: 10
-  delay: 5
-  register: result
-  until: result.rc == 0
 
 
 

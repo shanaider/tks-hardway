@@ -1,19 +1,23 @@
 #Sample Inventory File
 [all]
-pump-cluster-0001 ansible_host=110.238.117.250 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.95
-pump-cluster-0002 ansible_host=49.0.199.46 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.15
-pump-cluster-0003 ansible_host=94.74.119.22 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.208
-pump-cluster-0004 ansible_host=43.255.106.69 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.201
+pump-cluster-0001 ansible_host=94.74.119.22 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.230
+pump-cluster-0002 ansible_host=94.74.117.254 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.177
+pump-cluster-0003 ansible_host=43.255.106.69 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.163
+#pump-cluster-0004 ansible_host=94.74.119.22 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.22
+#pump-cluster-0005 ansible_host=43.255.106.69 ansible_connection=ssh ansible_user=root ansible_ssh_pass="w,j[vd.8i" internal_ip=192.168.0.168
 
 [master]
 pump-cluster-0001
-pump-cluster-0002
-pump-cluster-0003
+#pump-cluster-0002
+#pump-cluster-0003
 
 [etcd]
 pump-cluster-0001
-pump-cluster-0002
-pump-cluster-0003
+#pump-cluster-0002
+#pump-cluster-0003
 
 [worker]
-pump-cluster-0004
+pump-cluster-0002
+pump-cluster-0003
+#pump-cluster-0004
+#pump-cluster-0005

@@ -1,10 +1,19 @@
 ---
+- name: "Make Directory of kubernetes "
+  file:
+    path: '{{ item }}'
+    state: directory
+    mode: 0755
+  with_items: 
+    - "/var/lib/kubernetes/"
+    - "/etc/kubernetes/config"
+
 - name: Copy the Cert & Key file from master0 to master1-2 
   synchronize:
     src: "/root/{{ item }}"
     dest: "/var/lib/kubernetes/{{ item }}"
     mode: push
-  delegate_to: "{{groups['master']}}"
+  delegate_to: "{{groups['master'][0]}}"
   with_items: 
     - 'ca.pem'
     - 'ca-key.pem'
@@ -12,136 +21,84 @@
     - 'kubernetes-key.pem' 
     - 'service-account.pem'
     - 'service-account-key.pem'
+    - 'admin-key.pem'
+    - 'admin.pem'
+    - 'admin.kubeconfig'
+    - 'kube-controller-manager.kubeconfig'
+    - 'kube-scheduler.kubeconfig'
+    - 'encryption-config.yaml'
 
-- name: "Bootstrapping the Kubernetes Control Plane"
-  shell: |
-    sudo mkdir -p /etc/kubernetes/config
-    wget -q --show-progress --https-only --timestamping \
-      "https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-apiserver" \
-      "https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-controller-manager" \
-      "https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-scheduler" \
-      "https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kubectl"
-    
-    {
-      chmod +x kube-apiserver kube-controller-manager kube-scheduler kubectl
-      sudo mv kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local/bin/
-    }
+- name: "Bootstrapping the Kubernetes Control Plane"   
+  get_url:
+    url: '{{ item }}'
+    dest: /usr/local/bin/
+    validate_certs: no
+    timeout: 30
+  retries: 5
+  delay: 3
+  register: get_url_result
+  until: get_url_result is succeeded
+  with_items:
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-apiserver
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-controller-manager
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kube-scheduler
+    - https://storage.googleapis.com/kubernetes-release/release/v1.21.0/bin/linux/amd64/kubectl
 
-    {
-      sudo mkdir -p /var/lib/kubernetes/
+- name: "Creating single-master with kube-apiserver.service"
+  vars:
+    HOST_COUNT: "{{ groups['master'] | length }}"
+  template:
+    src: single-kube-apiserver.service.j2
+    dest: /etc/systemd/system/kube-apiserver.service
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - HOST_COUNT == "1"
+    - inventory_hostname == groups['master'][0]
 
-      sudo cp ca.pem ca-key.pem kubernetes-key.pem kubernetes.pem \
-        service-account-key.pem service-account.pem /var/lib/kubernetes/
-    }
-
-- name: "Creating kube-apiserver.service"
-  shell: |
-    cat <<EOF | sudo tee /etc/systemd/system/kube-apiserver.service
-    [Unit]
-    Description=Kubernetes API Server
-    Documentation=https://github.com/kubernetes/kubernetes
-
-    [Service]
-    ExecStart=/usr/local/bin/kube-apiserver \\
-      --advertise-address={{ INTERNAL_IP }} \\
-      --allow-privileged=true \\
-      --apiserver-count=3 \\
-      --audit-log-maxage=30 \\
-      --audit-log-maxbackup=3 \\
-      --audit-log-maxsize=100 \\
-      --audit-log-path=/var/log/audit.log \\
-      --authorization-mode=Node,RBAC \\
-      --bind-address=0.0.0.0 \\
-      --client-ca-file=/var/lib/kubernetes/ca.pem \\
-      --enable-admission-plugins=NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
-      --etcd-cafile=/var/lib/kubernetes/ca.pem \\
-      --etcd-certfile=/var/lib/kubernetes/kubernetes.pem \\
-      --etcd-keyfile=/var/lib/kubernetes/kubernetes-key.pem \\
-      --etcd-servers=https://{{ INTERNAL_IP }}:2379 \\
-      --event-ttl=1h \\
-      --encryption-provider-config=/var/lib/kubernetes/encryption-config.yaml \\
-      --kubelet-certificate-authority=/var/lib/kubernetes/ca.pem \\
-      --kubelet-client-certificate=/var/lib/kubernetes/kubernetes.pem \\
-      --kubelet-client-key=/var/lib/kubernetes/kubernetes-key.pem \\
-      --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname \\
-      --runtime-config='api/all=true' \\
-      --service-account-key-file=/var/lib/kubernetes/service-account.pem \\
-      --service-account-signing-key-file=/var/lib/kubernetes/service-account-key.pem \\
-      --service-account-issuer=https://{{ KUBERNETES_PUBLIC_ADDRESS }}:6443 \\
-      --service-cluster-ip-range={{SERVICE_CIDR}} \\
-      --service-node-port-range=30000-32767 \\
-      --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \\
-      --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \\
-      --v=2
-    Restart=on-failure
-    RestartSec=5
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
-
+- name: "Creating multi-master with kube-apiserver.service"
+  vars:
+    HOST_COUNT: "{{ groups['master'] | length }}"
+  template:
+    src: multi-kube-apiserver.service.j2
+    dest: /etc/systemd/system/kube-apiserver.service
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - HOST_COUNT == "3"
 
 - name: "Creating kube-controller-manager.service"
-  shell: |
-    cat <<EOF | sudo tee /etc/systemd/system/kube-controller-manager.service
-    [Unit]
-    Description=Kubernetes Controller Manager
-    Documentation=https://github.com/kubernetes/kubernetes
-
-    [Service]
-    ExecStart=/usr/local/bin/kube-controller-manager \\
-      --bind-address=0.0.0.0 \\
-      --cluster-cidr={{CLUSTER_CIDR}} \\
-      --cluster-name=kubernetes \\
-      --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \\
-      --cluster-signing-key-file=/var/lib/kubernetes/ca-key.pem \\
-      --kubeconfig=/var/lib/kubernetes/kube-controller-manager.kubeconfig \\
-      --leader-elect=true \\
-      --root-ca-file=/var/lib/kubernetes/ca.pem \\
-      --service-account-private-key-file=/var/lib/kubernetes/service-account-key.pem \\
-      --service-cluster-ip-range={{ SERVICE_CIDR }}  \\
-      --use-service-account-credentials=true \\
-      --v=2
-    Restart=on-failure
-    RestartSec=5
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
-
-    sudo mv kube-controller-manager.kubeconfig /var/lib/kubernetes/
-
-    
+  template:
+    src: kube-controller-manager.service.j2
+    dest: /etc/systemd/system/kube-controller-manager.service
+    owner: root
+    group: root
+    mode: '0644'
 
 
 - name: "Creating kube-scheduler.yaml"
-  shell: |
-    cat <<EOF | sudo tee /etc/kubernetes/config/kube-scheduler.yaml
-    apiVersion: kubescheduler.config.k8s.io/v1beta1
-    kind: KubeSchedulerConfiguration
-    clientConnection:
-      kubeconfig: "/var/lib/kubernetes/kube-scheduler.kubeconfig"
-    leaderElection:
-      leaderElect: true
-    EOF
+  copy: 
+    dest: /etc/kubernetes/config/kube-scheduler.yaml
+    content: |
+      apiVersion: kubescheduler.config.k8s.io/v1beta1
+      kind: KubeSchedulerConfiguration
+      clientConnection:
+        kubeconfig: "/var/lib/kubernetes/kube-scheduler.kubeconfig"
+      leaderElection:
+        leaderElect: true
+    owner: root
+    group: root
+    mode: '0644'
 
-    cat <<EOF | sudo tee /etc/systemd/system/kube-scheduler.service
-    [Unit]
-    Description=Kubernetes Scheduler
-    Documentation=https://github.com/kubernetes/kubernetes
-
-    [Service]
-    ExecStart=/usr/local/bin/kube-scheduler \\
-      --config=/etc/kubernetes/config/kube-scheduler.yaml \\
-      --v=2
-    Restart=on-failure
-    RestartSec=5
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
-
-    sudo mv kube-scheduler.kubeconfig /var/lib/kubernetes/
+- name: "Creating kube-scheduler.service"
+  template:
+    src: kube-scheduler.service.j2
+    dest: /etc/systemd/system/kube-scheduler.service
+    owner: root
+    group: root
+    mode: '0644'
 
 
 - name: 'Reload / Enable / start Controller-Plane'
@@ -158,19 +115,29 @@
 - name: 'Configuring kubectl for Remote Access'
   shell: |
     kubectl config set-cluster kubernetes-the-hard-way \
-    --certificate-authority=ca.pem \
+    --certificate-authority=/var/lib/kubernetes/ca.pem \
     --embed-certs=true \
-    --server=https://{{ KUBERNETES_PUBLIC_ADDRESS }}:6443
+    --server=https://{{ kube_apiserver_ip }}:6443
 
     kubectl config set-credentials admin \
-      --client-certificate=admin.pem \
-      --client-key=admin-key.pem
+      --client-certificate=/var/lib/kubernetes/admin.pem \
+      --client-key=/var/lib/kubernetes/admin-key.pem
 
     kubectl config set-context kubernetes-the-hard-way \
       --cluster=kubernetes-the-hard-way \
       --user=admin
 
     kubectl config use-context kubernetes-the-hard-way
+
+- name: "set /root/.bashrc"
+  lineinfile:
+    dest: /root/.bashrc
+    state: present
+    line: "{{ item }}"
+  with_items:
+    - source <(kubectl completion bash)
+    - alias k=kubectl
+    - complete -F __start_kubectl k
 
 - name: 'RBAC for Kubelet Authorization'
   copy:
@@ -209,17 +176,13 @@
           - apiGroup: rbac.authorization.k8s.io
             kind: User
             name: kubernetes
+  when:
+    - inventory_hostname == groups['master'][0]
 
 - name: "kubectl apply /root/rbac-for-kubelet.yaml"
   shell: kubectl apply  -f /root/rbac-for-kubelet.yaml
+  when:
+    - inventory_hostname == groups['master'][0]
 
-- name: "set /root/.bashrc"
-  lineinfile:
-    dest: /root/.bashrc
-    state: present
-    line: "{{ item }}"
-  with_items:
-    - source <(kubectl completion bash)
-    - alias k=kubectl
-    - complete -F __start_kubectl k
+
 

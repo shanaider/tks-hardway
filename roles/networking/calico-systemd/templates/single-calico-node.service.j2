@@ -1,0 +1,38 @@
+#!/bin/bash
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+mkdir -p /var/log/calico
+mkdir -p /var/run/calico
+mkdir -p /var/lib/calico
+
+# while ! $(curl -m 5 -k https://127.0.0.1:6443/version -sS -o /dev/null)
+# do
+# sleep 5
+# done
+
+/usr/bin/podman stop calico-node &>/dev/null
+/usr/bin/podman rm calico-node &>/dev/null
+ifconfig tunl0 down
+
+# do not use run with -d
+# do not use run with -d
+podman run --runtime /usr/local/bin/crun --network=host --privileged --name=calico-node --restart=unless-stopped \
+  -e KUBERNETES_SERVICE_HOST={{ hostvars[inventory_hostname]['internal_ip'] }} \
+  -e KUBERNETES_SERVICE_PORT=6443 \
+  -e CALICO_NETWORKING_BACKEND=bird \
+  -e ETCD_ENDPOINTS=https://{{ hostvars[groups['etcd'][0]]['internal_ip'] }}:2379 \
+  -e ETCD_DISCOVERY_SRV= \
+  -e ETCD_CA_CERT_FILE=/etc/calico/etcd/etcd-ca \
+  -e ETCD_KEY_FILE=/etc/calico/etcd/etcd-key \
+  -e ETCD_CERT_FILE=/etc/calico/etcd/etcd-cert \
+  -e CALICO_IPV4POOL_CIDR=192.169.0.0/16 \
+  -e WAIT_FOR_DATASTORE=true \
+  -e TZ=Asia/Bangkok \
+  -v /dev/null:/etc/service/enabled/bird6 \
+  -v /var/log/calico:/var/log/calico \
+  -v /var/run/calico:/var/run/calico \
+  -v /var/lib/calico:/var/lib/calico \
+  -v /lib/modules:/lib/modules \
+  -v /run:/run \
+  -v /etc/calico/etcd:/etc/calico/etcd \
+  -v /etc/calico/sa:/var/run/secrets/kubernetes.io/serviceaccount \
+  docker.io/calico/node:v3.20.4

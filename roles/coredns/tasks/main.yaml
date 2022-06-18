@@ -1,11 +1,13 @@
 ---
 - name: "Using template CoreDNS Template"
   template:
-    src: files/coredns.yml
+    src: coredns.yml.j2
     dest: /root/coredns.yml
 
 - name: "Deploy CoreDNS"
   command: kubectl apply -f /root/coredns.yml
+  when:
+    - inventory_hostname == groups['master'][0]
 
 - name: "Download CoreDNS Binary file"   
   get_url:
@@ -22,7 +24,6 @@
     chmod +x coredns
     chown root:root coredns
     mv coredns /usr/local/bin
-
 
 
 - name: "Add user coredns"
