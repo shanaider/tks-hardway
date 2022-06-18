@@ -1,4 +1,17 @@
 ---
+##kube version
+kube_version: "v1.21.9"
+
+# Choose containerd or crio
+container_manager: "containerd"
+
+# add-one (true/false)
+local_node_dns: "true"
+localdns_ip: "169.254.20.53"
+
+##Cluster domain
+cluster_name: "cluster.local"
+
 ##DNS server
 dns_server_1: "8.8.8.8"
 dns_server_2: "1.0.0.1"
@@ -7,23 +20,20 @@ dns_server_2: "1.0.0.1"
 ntp_server_1: "time.google.com"
 ntp_server_2: "ntp.ubuntu.com"
 
+##IP Service Kubernetes
+kube_service: "192.96.0.1"
+
 ##IP Service CoreDNS
 kubedns: "192.96.0.10"
 
 ##IP Master or LB for kubeconfig
-KUBERNETES_PUBLIC_ADDRESS: "{{ ansible_host }}"
-
-##IP of the master via internal_ip
-INTERNAL_IP: "{{ internal_ip }}"
+kube_apiserver_ip: "94.74.119.22"
 
 ##IP range of the SVC in the cluster
 SERVICE_CIDR: "192.96.0.0/16"
 
 ##IP range of the hosts(VM) in the cluster
 CLUSTER_CIDR: "192.168.0.0/16"
-
-##These're domain for generating the Certificartes.
-KUBERNETES_HOSTNAMES: "kubernetes,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.svc.cluster.local"
 
 
 

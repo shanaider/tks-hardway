@@ -16,16 +16,17 @@
 - name: 'generate Certificate Authority'
   shell: |
     {
+
     cat > ca-config.json <<EOF
     {
       "signing": {
         "default": {
-          "expiry": "876000h"
+          "expiry": "884760h"
         },
         "profiles": {
           "kubernetes": {
             "usages": ["signing", "key encipherment", "server auth", "client auth"],
-            "expiry": "876000h"
+            "expiry": "884760h"
           }
         }
       }
@@ -34,6 +35,7 @@
 
     cat > ca-csr.json <<EOF
     {
+      "CA":{"expiry": "876000h","pathlen":0},
       "CN": "Kubernetes",
       "key": {
         "algo": "rsa",
@@ -208,6 +210,26 @@
 
     }
 
+- name: kubeadm | aggregate all SANs
+  set_fact:
+    apiserver_sans: "{{ (sans_base + sans_access_ip  + sans_address + sans_hostname) | unique }}"
+  vars:
+    sans_base:
+      - "kubernetes"
+      - "kubernetes.default"
+      - "kubernetes.default.svc"
+      - "kubernetes.default.svc.{{ cluster_name }}"
+      - "{{ kube_apiserver_ip }}"
+      - "{{ kube_service }}"
+      - "localhost"
+      - "127.0.0.1"
+    sans_access_ip: "{{ groups['master'] | map('extract', hostvars, 'internal_ip') | list | select('defined') | list}}"
+    sans_address: "{{ groups['master'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) }}"
+    sans_hostname: "{{ groups['master'] | map('extract', hostvars, ['ansible_hostname'])}}"
+  tags: facts
+
+- debug: msg="{{ apiserver_sans | join(',')   }}" 
+
 - name: 'generate The Kubernetes API Server Certificate'
   shell: |
     {
@@ -234,7 +256,7 @@
       -ca=ca.pem \
       -ca-key=ca-key.pem \
       -config=ca-config.json \
-      -hostname=192.96.0.1,{{ INTERNAL_IP }},{{ KUBERNETES_PUBLIC_ADDRESS }},127.0.0.1,{{ KUBERNETES_HOSTNAMES }} \
+      -hostname={{ apiserver_sans | join(',') }} \
       -profile=kubernetes \
       kubernetes-csr.json | cfssljson -bare kubernetes
 
@@ -271,14 +293,13 @@
 
     }
 
-##skip scp to master-node
 
 - name: 'The kubelet Kubernetes Configuration File'
   shell: |
     kubectl config set-cluster kubernetes-the-hard-way \
     --certificate-authority=ca.pem \
     --embed-certs=true \
-    --server=https://{{ KUBERNETES_PUBLIC_ADDRESS }}:6443 \
+    --server=https://{{ kube_apiserver_ip }}:6443 \
     --kubeconfig={{ item }}.kubeconfig
 
     kubectl config set-credentials system:node:{{ item }} \
@@ -301,7 +322,7 @@
       kubectl config set-cluster kubernetes-the-hard-way \
         --certificate-authority=ca.pem \
         --embed-certs=true \
-        --server=https://{{ KUBERNETES_PUBLIC_ADDRESS }}:6443 \
+        --server=https://{{ kube_apiserver_ip }}:6443 \
         --kubeconfig=kube-proxy.kubeconfig
 
       kubectl config set-credentials system:kube-proxy \
@@ -386,6 +407,23 @@
 
       kubectl config use-context default --kubeconfig=admin.kubeconfig
     }
+
+- name: 'Generating the Data Encryption Config and Key'
+  shell: |
+    ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
+    cat > encryption-config.yaml <<EOF
+    kind: EncryptionConfig
+    apiVersion: v1
+    resources:
+      - resources:
+          - secrets
+        providers:
+          - aescbc:
+              keys:
+                - name: key1
+                  secret: ${ENCRYPTION_KEY}
+          - identity: {}
+    EOF
 
 
 

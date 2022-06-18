@@ -116,6 +116,9 @@
       - software-properties-common
       - sshpass
       - socat
+    register: apt_res
+    retries: 5
+    until: apt_res is succeeded
   
   - stat: path=/etc/chrony/chrony.conf
     register: chronyconf

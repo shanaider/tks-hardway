@@ -1,0 +1,12 @@
+# Versions
+kubeadm_version: "{{ kube_version }}"
+image_arch: "amd64"
+
+kubelet_checksums:
+  amd64:
+    v1.21.9: 1fa0c296df6af71fca1bdd94f9fb19c7051b4b3f8cf19c353192cb96b413fcf2
+
+
+
+kubelet_binary_checksum: "{{ kubelet_checksums[image_arch][kube_version] }}"
+

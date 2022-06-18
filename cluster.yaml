@@ -1,0 +1,32 @@
+# - name: pre-requisite
+#   hosts: all
+#   roles: 
+#     - pre-requisite
+
+- name: init-master-node
+  hosts: master
+  roles:
+    - download
+#     - etcd
+#     - master-node
+
+# - name: init-worker-node
+#   hosts: worker
+#   roles:
+#      - container-engine
+#      - worker-node
+
+# - name: "install calico daemonset"
+#   hosts: "{{groups['master'][0]}}"
+#   roles:
+#     - networking/calico-ds
+
+# - name: "Enable calico with BPF mode and install calico-systemd"
+#   hosts: master
+#   roles:
+#     - networking/calicoctl
+#     - networking/calico-systemd
+#     - coredns
+#     - networking/nodelocal-dns
+
+    

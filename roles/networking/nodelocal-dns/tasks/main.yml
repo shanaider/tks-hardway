@@ -1,0 +1,24 @@
+- name: "Get IP kube-dns service"
+  command: kubectl get svc kube-dns -n kube-system -o jsonpath={.spec.clusterIP}
+  register: kubedns
+  when:
+    - inventory_hostname == groups['master'][0]
+
+- debug:
+    msg: '{{ kubedns.stdout }}'
+
+- name: "Using nodelocal-dns template"
+  template:
+    src: nodelocal-dns.yml.j2
+    dest: /root/nodelocal-dns.yml
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - inventory_hostname == groups['master'][0]
+
+- name: "kubectl create -f /root/nodelocal-dns.yml"
+  command: kubectl create -f /root/nodelocal-dns.yml
+  when: 
+    - inventory_hostname == groups['master'][0]
+    - local_node_dns | bool

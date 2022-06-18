@@ -1,0 +1,12 @@
+- name: Download Tomcat using get_url
+  get_url:
+    url: '{{ item }}'
+    dest: /tmp/
+    mode: '0755'
+    checksum: sha256:'{{ kubelet_binary_checksum }}'
+    group: root
+    owner: root
+  with_items:
+    - http://util0.tks.trueidc.com/src/hardway/binary/kubernetes/1.21.9/kubelet
+    # - http://util0.tks.trueidc.com/src/hardway/binary/kubernetes/1.21.9/kubectl
+    # - http://util0.tks.trueidc.com/src/hardway/binary/kubernetes/1.21.9/kube-scheduler

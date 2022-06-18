@@ -1,26 +1,34 @@
 ---
 - name: "Include task gen-certificates"
   include_tasks: gen-cert.yml
+  when: 
+    - inventory_hostname == groups['master'][0]
 
-- name: 'Generating the Data Encryption Config and Key'
-  shell: |
-    ENCRYPTION_KEY=$(head -c 32 /dev/urandom | base64)
-    cat > encryption-config.yaml <<EOF
-    kind: EncryptionConfig
-    apiVersion: v1
-    resources:
-      - resources:
-          - secrets
-        providers:
-          - aescbc:
-              keys:
-                - name: key1
-                  secret: ${ENCRYPTION_KEY}
-          - identity: {}
-    EOF
+- name: "Make Directory of ETCD "
+  file:
+    path: '{{ item }}'
+    state: directory
+    mode: 0700
+  with_items: 
+    - "/var/lib/etcd"
+    - "/etc/etcd"
 
-    mkdir -p /var/lib/kubernetes/
-    sudo mv encryption-config.yaml /var/lib/kubernetes/
+- name: "Make Directory of Kubernetes"
+  file:
+    path: /var/lib/kubernetes/
+    state: directory
+    mode: 0755
+
+- name: Copy the Cert & Key file from master0 to master1-2 with PUSH method
+  synchronize:
+    src: "/root/{{ item }}"
+    dest: "/etc/etcd/{{ item }}"
+    mode: push
+  delegate_to: "{{groups['master'][0]}}"
+  with_items: 
+    - 'ca.pem'
+    - 'kubernetes.pem'
+    - 'kubernetes-key.pem' 
 
 - name: 'Bootstrapping an etcd Cluster Member'
   shell: |
@@ -32,42 +40,36 @@
       sudo mv etcd-v3.4.15-linux-amd64/etcd* /usr/local/bin/
     }
 
-    {
-      sudo mkdir -p /etc/etcd /var/lib/etcd
-      sudo chmod 700 /var/lib/etcd
-      sudo cp ca.pem kubernetes-key.pem kubernetes.pem /etc/etcd/
-    }
-
     ETCD_NAME=$(hostname -s)
 
-    cat <<EOF | sudo tee /etc/systemd/system/etcd.service
-    [Unit]
-    Description=etcd
-    Documentation=https://github.com/coreos
+- name: "Creating Single-ETCD Service"
+  vars:
+    HOST_COUNT: "{{ groups['etcd'] | length }}"
+  template:
+    src: single-etcd.service.j2
+    dest: /etc/systemd/system/etcd.service
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - HOST_COUNT == "1"
+    - inventory_hostname == groups['etcd'][0]
 
-    [Service]
-    Type=notify
-    ExecStart=/usr/local/bin/etcd \\
-      --name ${ETCD_NAME} \\
-      --cert-file=/etc/etcd/kubernetes.pem \\
-      --key-file=/etc/etcd/kubernetes-key.pem \\
-      --peer-cert-file=/etc/etcd/kubernetes.pem \\
-      --peer-key-file=/etc/etcd/kubernetes-key.pem \\
-      --trusted-ca-file=/etc/etcd/ca.pem \\
-      --peer-trusted-ca-file=/etc/etcd/ca.pem \\
-      --peer-client-cert-auth \\
-      --client-cert-auth \\
-      --initial-advertise-peer-urls https://{{ INTERNAL_IP }}:2380 \\
-      --listen-peer-urls https://{{ INTERNAL_IP }}:2380 \\
-      --listen-client-urls https://{{ INTERNAL_IP }}:2379,https://127.0.0.1:2379 \\
-      --advertise-client-urls https://{{ INTERNAL_IP }}:2379 \\
-      --data-dir=/var/lib/etcd
-    Restart=on-failure
-    RestartSec=5
+- name: "Creating Multi-ETCD Service"
+  vars:
+    HOST_COUNT: "{{ groups['etcd'] | length }}"
+  template:
+    src: multi-etcd.service.j2
+    dest: /etc/systemd/system/etcd.service
+    owner: root
+    group: root
+    mode: '0644'
+  when:
+    - HOST_COUNT == "3"
 
-    [Install]
-    WantedBy=multi-user.target
-    EOF
+# - debug:
+#     msg: HOST_COUNT
+
 
 - name: 'Reload / Enable / start ETCD service'
   systemd:
@@ -86,6 +88,6 @@
   register: result
 
 - debug:
-    var: result
-    verbosity: 2
+    msg: result
+
 
